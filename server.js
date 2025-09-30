@@ -32,7 +32,7 @@ app.use("/api/measurements", measurementRoutes);
 app.use("/api/alerts", alertRoutes); // new alerts endpoint
 
 // Test route
-app.get("/", (req, res) => {
+app.get("/",  (req, res) => {
   res.send("🚀 SIH Backend is running!");
 });
 
