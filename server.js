@@ -3,6 +3,10 @@ const connectDB = require("./config/db");
 const stationRoutes = require("./routes/stationRoutes");
 const measurementRoutes = require("./routes/measurementRoutes");
 const alertRoutes = require("./routes/alertRoutes"); // new alerts routes
+
+const Measurement = require("./models/Measurement");
+const Station = require("./models/Station");
+
 const cors = require("cors");
 require("dotenv").config();
 

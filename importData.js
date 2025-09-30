@@ -9,23 +9,26 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
 
-const filePath = "./data/main_data_cleaned.json"; // your NDJSON file backend\data\main_data_cleaned.json
+const filePath = "./data/main_data_cleaned.json"; // your NDJSON file
 
 const importData = async () => {
   try {
-    const lines = fs.readFileSync(filePath, "utf-8").split("\n").filter(Boolean);
+    // 1️⃣ Delete existing data
+    await Station.deleteMany();
+    await Measurement.deleteMany();
+    console.log("✅ Existing stations and measurements deleted");
+
+    const lines = fs.readFileSync(filePath, "utf-8")
+      .split("\n")
+      .filter(Boolean);
 
     const stationsMap = new Map();
     const measurementsBatch = [];
-    const batchSize = 1000; // insert 1000 measurements at a time
+    const batchSize = 1000;
 
-    // await Station.deleteMany();
-    // await Measurement.deleteMany();
-
-    for (let i = 0; i < lines.length; i++) {
-      const obj = JSON.parse(lines[i]);
-
-      // Store unique stations
+    // 2️⃣ First pass: collect unique stations
+    for (const line of lines) {
+      const obj = JSON.parse(line);
       if (!stationsMap.has(obj.stationCode)) {
         stationsMap.set(obj.stationCode, {
           stationCode: obj.stationCode,
@@ -41,34 +44,46 @@ const importData = async () => {
           block: obj.block,
         });
       }
+    }
 
-      // Add measurement
+    // 3️⃣ Insert stations into DB
+    const stationsArray = [...stationsMap.values()];
+    const insertedStations = await Station.insertMany(stationsArray);
+    console.log(`✅ ${insertedStations.length} stations imported successfully`);
+
+    // 4️⃣ Create a map of stationCode → ObjectId
+    const stationIdMap = new Map();
+    insertedStations.forEach(station => {
+      stationIdMap.set(station.stationCode, station._id);
+    });
+
+    // 5️⃣ Second pass: prepare and insert measurements
+    for (let i = 0; i < lines.length; i++) {
+      const obj = JSON.parse(lines[i]);
+
       measurementsBatch.push({
-        stationCode: obj.stationCode,
-        value: obj.Value,
-        dateTime: new Date(obj.Date_Time),
-        wellDepth: obj.well_depth,
+        station: stationIdMap.get(obj.stationCode), // ObjectId reference
+        value: parseFloat(obj.Value),
+        dateTime: new Date(Number(obj.Date_Time)),
+        wellDepth: parseFloat(obj.well_depth),
         wellAquiferType: obj.well_aquifer_type,
       });
 
-      // Insert batch
+      // Insert in batches
       if (measurementsBatch.length === batchSize) {
         await Measurement.insertMany(measurementsBatch);
-        measurementsBatch.length = 0; // clear batch
         console.log(`Inserted ${i + 1} measurements...`);
+        measurementsBatch.length = 0; // clear batch
       }
     }
 
     // Insert remaining measurements
     if (measurementsBatch.length > 0) {
       await Measurement.insertMany(measurementsBatch);
+      console.log(`Inserted remaining ${measurementsBatch.length} measurements`);
     }
 
-    // Insert stations
-    await Station.insertMany([...stationsMap.values()]);
-    console.log(`✅ ${stationsMap.size} stations imported successfully`);
-    console.log(`✅ All measurements imported successfully`);
-
+    console.log("✅ All measurements imported successfully");
     mongoose.disconnect();
   } catch (err) {
     console.error("❌ Error importing data:", err);

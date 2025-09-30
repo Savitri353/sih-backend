@@ -10,7 +10,7 @@ exports.getAllStations = async (req, res) => {
   }
 };
 
-// Get single station metadata
+// Get single station metadata by stationCode
 exports.getStationByCode = async (req, res) => {
   try {
     const station = await Station.findOne({ stationCode: req.params.stationCode });
